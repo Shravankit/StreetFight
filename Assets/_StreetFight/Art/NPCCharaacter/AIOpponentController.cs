@@ -66,7 +66,7 @@ namespace CombatSystem
             Vector3 toTarget = target.position - transform.position;
             toTarget.y = 0f;
             float distance = toTarget.magnitude;
-            bool canAct = !combat.IsAttacking; // never move or turn while root motion owns an attack
+            bool canAct = !combat.IsAttacking && !combat.IsStunned; // never move or turn while root motion owns an attack
 
             if (canAct && toTarget.sqrMagnitude > 0.001f)
             {

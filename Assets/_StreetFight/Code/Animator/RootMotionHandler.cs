@@ -28,41 +28,41 @@ namespace StreetFight.Code.Animation
             if (animator == null) animator = GetComponent<Animator>();
         }
 
-        // private void OnAnimatorMove()
-        // {
-        //     Vector3 delta = animator.deltaPosition;
-        //     Quaternion rotDelta = animator.deltaRotation;
+        private void OnAnimatorMove()
+        {
+            Vector3 delta = animator.deltaPosition;
+            Quaternion rotDelta = animator.deltaRotation;
 
-        //     // Never let a clip move the character vertically — this is what most commonly
-        //     // causes "unexpected upward movement" bugs with root motion.
-        //     delta.y = 0f;
+            // Never let a clip move the character vertically — this is what most commonly
+            // causes "unexpected upward movement" bugs with root motion.
+            delta.y = 0f;
 
-        //     if (combatController != null && combatController.IsAttacking)
-        //     {
-        //         var attack = combatController.CurrentAttack;
+            if (combatController != null && combatController.IsAttacking)
+            {
+                var attack = combatController.CurrentAttack;
 
-        //         if (attack != null && !attack.allowRootTranslation)
-        //         {
-        //             delta = Vector3.zero;
-        //         }
-        //         else if (attack != null)
-        //         {
-        //             float maxStep = attack.maxForwardSpeed * Time.deltaTime;
-        //             if (delta.magnitude > maxStep)
-        //                 delta = delta.normalized * maxStep;
-        //         }
-        //     }
+                if (attack != null && !attack.allowRootTranslation)
+                {
+                    delta = Vector3.zero;
+                }
+                else if (attack != null)
+                {
+                    float maxStep = attack.maxForwardSpeed * Time.deltaTime;
+                    if (delta.magnitude > maxStep)
+                        delta = delta.normalized * maxStep;
+                }
+            }
 
-        //     Vector3 targetPos = transform.position + delta;
-        //     targetPos = SnapToGround(targetPos);
+            Vector3 targetPos = transform.position + delta;
+            targetPos = SnapToGround(targetPos);
 
-        //     if (characterController != null && characterController.enabled)
-        //         characterController.Move(targetPos - transform.position);
-        //     else
-        //         transform.position = targetPos;
+            if (characterController != null && characterController.enabled)
+                characterController.Move(targetPos - transform.position);
+            else
+                transform.position = targetPos;
 
-        //     transform.rotation *= rotDelta;
-        // }
+            transform.rotation *= rotDelta;
+        }
 
         private Vector3 SnapToGround(Vector3 pos)
         {

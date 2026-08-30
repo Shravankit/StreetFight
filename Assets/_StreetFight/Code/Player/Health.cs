@@ -1,6 +1,7 @@
 using StreetFight.Code.Interfaces;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.UI;
 
 namespace StreetFight.Code.PLayer
 {
@@ -13,6 +14,7 @@ namespace StreetFight.Code.PLayer
     {
         [SerializeField] private float maxHealth = 100f;
         [SerializeField] private float currentHealth;
+        [SerializeField] private Slider health;
 
         public UnityEvent<float, GameObject> OnDamaged; // (amount, source)
         public UnityEvent OnDied;
@@ -20,6 +22,7 @@ namespace StreetFight.Code.PLayer
         private void Awake()
         {
             currentHealth = maxHealth;
+            RefreshSlider();
         }
 
         public void TakeDamage(float amount, GameObject source)
@@ -29,9 +32,18 @@ namespace StreetFight.Code.PLayer
             currentHealth = Mathf.Max(0f, currentHealth - amount);
             Debug.Log($"{name} took {amount} damage from {source.name} — {currentHealth}/{maxHealth} left");
             OnDamaged?.Invoke(amount, source);
+            RefreshSlider();
 
             if (currentHealth <= 0f)
                 OnDied?.Invoke();
+        }
+
+        private void RefreshSlider()
+        {
+            if (health == null) return;
+
+            health.maxValue = maxHealth;
+            health.value = currentHealth;
         }
     }
 }

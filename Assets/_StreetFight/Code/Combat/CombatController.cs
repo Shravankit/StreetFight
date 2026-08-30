@@ -492,6 +492,8 @@ namespace StreetFight.Code.Combat
         /// <summary>Set/read at runtime — e.g. spawn code does `player.SetTarget(opponentTransform)`.</summary>
         public void SetTarget(Transform newTarget) => target = newTarget;
 
+        public bool IsStunned => State == CombatState.Stunned;
+
         private AttackDataSO _currentAttack;
         private AttackDataSO _lastCompletedAttack;
         private float _lastAttackEndTime = -999f;
@@ -634,6 +636,7 @@ namespace StreetFight.Code.Combat
         public void Anim_OnHitFrame()
         {
             OnHitFrame?.Invoke(_currentAttack);
+            Debug.Log($"Hit frame for {_currentAttack.name} at {Time.time:F2}s");
             if (_currentAttack == null) return;
 
             Vector3 origin = transform.TransformPoint(_currentAttack.hitOffset);
@@ -645,10 +648,14 @@ namespace StreetFight.Code.Combat
 
                 var damageable = col.GetComponentInParent<IDamageable>();
                 if (damageable != null)
-                {
                     damageable.TakeDamage(_currentAttack.damage, gameObject);
+
+                var reactable = col.GetComponentInParent<IHitReactable>();
+                if (reactable != null)
+                    reactable.ReactToHit(_currentAttack, gameObject);
+
+                if (damageable != null || reactable != null)
                     break; // one target per swing — drop this line for an AoE hit
-                }
             }
         }
 
@@ -711,6 +718,36 @@ namespace StreetFight.Code.Combat
             animator.CrossFadeInFixedTime(idleStateName, idleTransitionDuration, 0);
 
             OnComboEnded?.Invoke();
+        }
+
+        public void EnterStunned()
+        {
+            if (_safetyRoutine != null)
+            {
+                StopCoroutine(_safetyRoutine);
+                _safetyRoutine = null;
+            }
+
+            _currentAttack = null;
+            _comboWindowOpen = false;
+            _bufferHasInput = false;
+            State = CombatState.Stunned;
+        }
+
+        public void ExitStunned()
+        {
+            if (State != CombatState.Stunned) return;
+
+            // Getting interrupted breaks the combo flow — don't let an unrelated hit-reaction
+            // silently continue a combo chain that no longer makes sense.
+            _lastCompletedAttack = null;
+            State = CombatState.Idle;
+            ReturnToIdleAnimator();
+        }
+
+        private void ReturnToIdleAnimator()
+        {
+            animator.CrossFadeInFixedTime(idleStateName, idleTransitionDuration, 0);
         }
     }
 }

@@ -16,7 +16,7 @@ namespace StreetFight.Code.PLayer
 
         private void Update()
         {
-            bool canMove = combat == null || !combat.IsAttacking;
+            bool canMove = combat == null || (!combat.IsAttacking && !combat.IsStunned);
 
             float h = Input.GetAxisRaw("Horizontal");
             float v = Input.GetAxisRaw("Vertical");
