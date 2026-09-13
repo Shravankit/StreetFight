@@ -1,0 +1,39 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/_StreetFight/UI/UITK/MainMenu/MainMenu.uss?fileID=7433441132597879392&amp;guid=3bf0200306bd35f4db165f8b0d4547b0&amp;type=3#MainMenu" />
+    <engine:VisualElement name="main-menu" class="main-menu">
+        <engine:VisualElement name="background" class="background" />
+        <engine:VisualElement name="vignette" class="vignette" />
+        <engine:VisualElement name="bat-watermark" class="bat-watermark" />
+
+        <engine:VisualElement name="menu-container" class="menu-container">
+            <engine:VisualElement name="title-accent" class="title-accent" />
+            <engine:Label name="game-title" text="STREET FIGHT" class="game-title" />
+            <engine:Label name="subtitle" text="B A T M A N   E D I T I O N" class="subtitle" />
+
+            <engine:VisualElement name="buttons" class="buttons">
+                <engine:VisualElement name="continue-row" class="menu-row">
+                    <!-- <engine:Label text="01" class="row-index" /> -->
+                    <engine:Button name="continue-button" text="CONTINUE" class="menu-button" />
+                </engine:VisualElement>
+                <engine:VisualElement name="new-game-row" class="menu-row">
+                    <!-- <engine:Label text="02" class="row-index" /> -->
+                    <engine:Button name="new-game-button" text="NEW GAME" class="menu-button" />
+                </engine:VisualElement>
+                <engine:VisualElement name="settings-row" class="menu-row">
+                    <!-- <engine:Label text="03" class="row-index" /> -->
+                    <engine:Button name="settings-button" text="SETTINGS" class="menu-button" />
+                </engine:VisualElement>
+                <engine:VisualElement name="controls-row" class="menu-row">
+                    <!-- <engine:Label text="04" class="row-index" /> -->
+                    <engine:Button name="controls-button" text="CONTROLS" class="menu-button" />
+                </engine:VisualElement>
+                <engine:VisualElement name="quit-row" class="menu-row">
+                    <!-- <engine:Label text="05" class="row-index" /> -->
+                    <engine:Button name="quit-button" text="QUIT" class="menu-button quit-button" />
+                </engine:VisualElement>
+            </engine:VisualElement>
+        </engine:VisualElement>
+
+        <engine:Label name="version" text="VERSION 0.1" class="version" />
+    </engine:VisualElement>
+</engine:UXML>
