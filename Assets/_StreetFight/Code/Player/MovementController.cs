@@ -16,7 +16,9 @@ namespace StreetFight.Code.PLayer
 
         private void Update()
         {
-            bool canMove = combat == null || (!combat.IsAttacking && !combat.IsStunned);
+            // Blocking still allows walking (you can hold guard and back away) — only
+            // Attacking, Stunned, and Dodging fully own movement/the Animator themselves.
+            bool canMove = combat == null || (!combat.IsAttacking && !combat.IsStunned && !combat.IsDodging);
 
             float h = Input.GetAxisRaw("Horizontal");
             float v = Input.GetAxisRaw("Vertical");
@@ -36,7 +38,7 @@ namespace StreetFight.Code.PLayer
             {
                 animator.SetFloat(SpeedHash, 0f, 0.1f, Time.deltaTime);
             }
-            // else: attacking — CombatController + RootMotionHandler own the Animator/position entirely.
+            // else: attacking/dodging — CombatController + RootMotionHandler own the Animator/position entirely.
         }
     }
 }

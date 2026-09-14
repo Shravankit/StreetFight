@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using StreetFight.Code.Interfaces;
+using StreetFight.Code.PLayer;
 using StreetFight.Enum;
 using StreetFight.ScriptableObjects;
 using UnityEngine;
@@ -32,6 +33,8 @@ namespace StreetFight.Code.Combat
         [Header("References")]
         [SerializeField] private Animator animator;
         [SerializeField] private CombatController combat;
+        [Tooltip("Auto-fetched if left empty. When this reports IsDead on the hit that lands, the Death reaction takes over instead of a normal tiered reaction.")]
+        [SerializeField] private Health health;
 
         [Header("Reaction Tiers")]
         [Tooltip("Used for AttackCategory.Light.")]
@@ -40,6 +43,8 @@ namespace StreetFight.Code.Combat
         [SerializeField] private ReactionData heavyReaction = new ReactionData { animatorStateName = "HitHeavy", transitionDuration = 0.05f, stunDuration = 0.6f };
         [Tooltip("Used for Special, Grab, and Counter — treat these as your big, un-interruptible hits (e.g. a knockdown).")]
         [SerializeField] private ReactionData knockdownReaction = new ReactionData { animatorStateName = "Knockdown", transitionDuration = 0.05f, stunDuration = 1.4f };
+        [Tooltip("Plays instead of any of the above the instant Health reports the character as dead. Permanent — never times out and can't be interrupted by a later hit.")]
+        [SerializeField] private ReactionData deathReaction = new ReactionData { animatorStateName = "Dead", transitionDuration = 0.1f, stunDuration = 0f };
 
         [Header("Facing")]
         [Tooltip("Snap to face the attacker the instant a reaction starts, so flinches always read as coming from the right direction.")]
@@ -61,7 +66,9 @@ namespace StreetFight.Code.Combat
         public bool IsReacting { get; private set; }
         public bool IsInvulnerable { get; private set; }
 
-        private int _currentTier = -1; // 0 light, 1 heavy, 2 knockdown
+        private const int DeathTier = 3; // above knockdown (2) — always wins, never times out
+
+        private int _currentTier = -1; // 0 light, 1 heavy, 2 knockdown, 3 death
         private float _reactionEndTime = -999f;
         private Coroutine _safetyRoutine;
 
@@ -69,6 +76,7 @@ namespace StreetFight.Code.Combat
         {
             animator = GetComponent<Animator>();
             combat = GetComponent<CombatController>();
+            health = GetComponent<Health>();
             characterController = GetComponent<CharacterController>();
         }
 
@@ -76,11 +84,24 @@ namespace StreetFight.Code.Combat
         {
             if (animator == null) animator = GetComponent<Animator>();
             if (combat == null) combat = GetComponent<CombatController>();
+            if (health == null) health = GetComponent<Health>();
         }
 
         public void ReactToHit(AttackDataSO attack, GameObject attacker)
         {
             if (attack == null) return;
+
+            // Checked first and unconditionally: Health.TakeDamage() always runs before
+            // ReactToHit() on the same landed hit (see CombatController.ResolveHit), so on the
+            // killing blow health.IsDead is already true by the time we get here. Routing death
+            // through this same call — rather than having Health crossfade the Animator on its
+            // own OnDied event — avoids a race where a normal hit-reaction crossfade fired from
+            // this same hit could stomp the death animation right after it starts.
+            if (health != null && health.IsDead)
+            {
+                PlayDeathReaction(attacker);
+                return;
+            }
 
             int tier = TierFor(attack.category);
             bool reactionInProgress = Time.time < _reactionEndTime;
@@ -108,6 +129,38 @@ namespace StreetFight.Code.Combat
 
             OnHitReactionStarted?.Invoke(attack.category);
             _safetyRoutine = StartCoroutine(SafetyEnd(data.stunDuration));
+        }
+
+        /// <summary>Top-priority, permanent reaction — plays once and never returns to idle.
+        /// Called directly from ReactToHit() rather than through the tier-interrupt checks the
+        /// other three tiers use, since death should always win regardless of what's currently
+        /// playing.</summary>
+        private void PlayDeathReaction(GameObject attacker)
+        {
+            if (_currentTier == DeathTier) return; // already dead and reacting — don't replay it
+
+            if (_safetyRoutine != null)
+            {
+                StopCoroutine(_safetyRoutine);
+                _safetyRoutine = null;
+            }
+
+            if (faceAttackerOnHit && attacker != null)
+                FaceAttacker(attacker.transform);
+
+            if (knockbackDistance > 0f && attacker != null)
+                ApplyKnockback(attacker.transform);
+
+            if (combat != null) combat.EnterStunned(); // locks out input/attacks; Health also disables the component separately
+
+            animator.CrossFadeInFixedTime(deathReaction.animatorStateName, deathReaction.transitionDuration, 0);
+
+            _currentTier = DeathTier;
+            _reactionEndTime = Mathf.Infinity; // never times out — see SafetyEnd/EndReaction, which are simply never scheduled here
+            IsReacting = true;
+            IsInvulnerable = true; // a corpse can't be hit again
+
+            OnHitReactionStarted?.Invoke(AttackCategory.Counter); // no dedicated category for death; treated as the same "big hit" bucket for listeners
         }
 
         private IEnumerator SafetyEnd(float duration)

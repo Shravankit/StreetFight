@@ -5,6 +5,17 @@ using UnityEngine;
 
 namespace StreetFight.ScriptableObjects
 {
+    // Moved inside the namespace — it previously sat in the global namespace after the closing
+    // brace below. It compiled fine (global-namespace fallback), but it's a landmine for the
+    // first `using` that happens to shadow it. Field names/types are unchanged, so this does
+    // not affect existing PunchStateData.asset / KickStateData.asset serialization.
+    [Serializable]
+    public struct ComboLink
+    {
+        public AttackInputType requiredInput;
+        public AttackDataSO nextAttack;
+    }
+
     [CreateAssetMenu(fileName = "NewAttack", menuName = "Combat System/Attack Data")]
     public class AttackDataSO : ScriptableObject
     {
@@ -29,6 +40,12 @@ namespace StreetFight.ScriptableObjects
         public float damage = 10f;
         public float hitRadius = 0.6f;
         public Vector3 hitOffset = new Vector3(0f, 1f, 1f);
+        [Tooltip("If true, a single hitbox Open/Close window can hit the same target more than once (e.g. a multi-hit special). Leave off for normal single-contact attacks.")]
+        public bool allowMultiHit = false;
+
+        [Header("Cooldown")]
+        [Tooltip("Minimum seconds between uses of THIS specific attack, independent of combo/idle state. 0 = no cooldown. Use this to rate-limit Specials/Grabs so they can't be spammed back-to-back.")]
+        public float cooldown = 0f;
 
         [Header("Root Motion")]
         [Tooltip("If false, RootMotionHandler discards this attack's forward translation entirely (useful for a finisher that shouldn't move the character at all).")]
@@ -54,10 +71,4 @@ namespace StreetFight.ScriptableObjects
             return false;
         }
     }
-}
-[Serializable]
-public struct ComboLink
-{
-    public AttackInputType requiredInput;
-    public StreetFight.ScriptableObjects.AttackDataSO nextAttack;
 }
