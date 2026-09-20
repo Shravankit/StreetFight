@@ -11,6 +11,8 @@ namespace StreetFight.Code.Combat
         public KeyCode heavyKey = KeyCode.Mouse1;
         public KeyCode specialKey = KeyCode.Q;
         public KeyCode dodgeKey = KeyCode.Space;
+        [Tooltip("Side-scroll only: tick if D moves you LEFT on screen (camera looking the other way)")]
+        public bool flipInput = false;
 
         Camera cam;
         Vector3 moveInput;
@@ -33,6 +35,7 @@ namespace StreetFight.Code.Combat
 
         protected override void Tick()
         {
+            if (FightOver) { SetMoving(false); return; }   // fight ended: stand still while the end camera plays
             moveInput = ReadMove();
 
             if (Input.GetKeyDown(dodgeKey)) HeroDodge();
@@ -47,7 +50,8 @@ namespace StreetFight.Code.Combat
                 if (moving)
                 {
                     RotateTowards(moveInput, turnSpeed);
-                    MoveBy(transform.forward * (walkSpeed * moveInput.magnitude * Time.deltaTime));
+                    Vector3 step = sideScroll ? moveInput : transform.forward * moveInput.magnitude;   // side-scroll: no waiting for the turn
+                    MoveBy(step * (walkSpeed * Time.deltaTime));
                 }
             }
         }
@@ -55,6 +59,9 @@ namespace StreetFight.Code.Combat
         Vector3 ReadMove()
         {
             float h = Input.GetAxisRaw("Horizontal");
+            if (sideScroll)
+                return Vector3.right * (flipInput ? -h : h);   // A/D or arrows only; W/S are ignored
+
             float v = Input.GetAxisRaw("Vertical");
             Vector3 fwd = cam ? Flat(cam.transform.forward).normalized : Vector3.forward;
             Vector3 right = cam ? Flat(cam.transform.right).normalized : Vector3.right;

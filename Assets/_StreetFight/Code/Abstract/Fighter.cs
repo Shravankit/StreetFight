@@ -8,6 +8,11 @@ namespace StreetFight.Code.Abstract
 {
     public enum FighterState { Free, Attacking, Dodging, HitStun, Dead }
 
+    /// <summary>
+    /// Shared brain for the hero and the NPC: health, attacks, hit detection, hit reactions,
+    /// dodging, knockback, hit-stop, ragdoll death, VFX/SFX and camera-shake triggers.
+    /// Animations are driven by CrossFade on state NAMES, so the Animator needs no transitions or parameters.
+    /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public abstract class Fighter : MonoBehaviour
     {
@@ -22,9 +27,12 @@ namespace StreetFight.Code.Abstract
         [Header("Animator (names must match the Animator window exactly)")]
         public Animator animator;
         public string idleState = "Idle";
-        public string walkState = "Walk_Fwd";
-        public string idleToWalkState = "Idle_To_Walk";
-        public string walkToIdleState = "Walk_To_Idle";
+        public string walkState = "Walk_Fwd";       // must live on the Legs layer (legs-only Avatar Mask)
+        [Tooltip("Animator layer that holds Walk_Fwd with a legs-only Avatar Mask")]
+        public string legsLayerName = "Legs";
+        public float legsBlendSpeed = 12f;
+        [Tooltip("Restart Walk_Fwd if its clip is not set to Loop Time (better: tick Loop Time on the clip)")]
+        public bool forceWalkLoop = true;
         public string dodgeFwdState = "Dodge_Fwd";
         public string dodgeBwdState = "Dodge_Bwd";
         public string hitState = "Damage_Front_Big_ver_A";
@@ -33,9 +41,11 @@ namespace StreetFight.Code.Abstract
 
         [Header("Movement")]
         public float walkSpeed = 2f;
-        public float turnSpeed = 540f;
+        public float turnSpeed = 720f;
         public float gravity = -20f;
-        public float locomotionTransitionTime = 0.3f;
+        [Tooltip("Left/right only. Everyone stays on one lane (world X axis, fixed Z).")]
+        public bool sideScroll = true;
+        public float laneZ = 0f;
 
         [Header("Dodge")]
         public float dodgeDistance = 2.6f;
@@ -119,6 +129,14 @@ namespace StreetFight.Code.Abstract
         public event System.Action<Fighter, HitInfo> Damaged;
         public event System.Action<Fighter> Died;
 
+        /// <summary>True once one whole side is defeated: the hero is dead, or every enemy is.</summary>
+        public static bool FightOver { get; private set; }
+        /// <summary>Raised once when the fight ends. The argument is the fighter whose death ended it.</summary>
+        public static event System.Action<Fighter> FightEnded;
+
+        /// <summary>Middle of the body. Follows the ragdoll after death (the root object stays where the fighter fell from).</summary>
+        public Vector3 FocusPoint => hips ? hips.position : transform.position + Vector3.up;
+
         // ------------------------------------------------------------------ internals
         protected CharacterController cc;
         protected AttackData queuedAttack;
@@ -128,13 +146,16 @@ namespace StreetFight.Code.Abstract
         static bool slowMoActive;
 
         AudioSource audioSource;
+        Transform hips;
         Coroutine actionRoutine, freezeRoutine;
         Rigidbody[] ragdollBodies = new Rigidbody[0];
         readonly HashSet<Fighter> hitVictims = new HashSet<Fighter>();
         readonly Collider[] overlapBuffer = new Collider[32];
         Vector3 knockbackVelocity, lastLimbPos;
         bool haveLastLimb, isMoving;
-        float verticalVelocity, locoTimer, dodgeT, nextDodgeTime;
+        float verticalVelocity, dodgeT, nextDodgeTime;
+        int legsLayer = -1, walkHash;
+        float legsWeight, lastWalkRestart;
 
         // ------------------------------------------------------------------ lifecycle
         protected virtual void Awake()
@@ -147,6 +168,29 @@ namespace StreetFight.Code.Abstract
             if (!audioSource) { audioSource = gameObject.AddComponent<AudioSource>(); audioSource.spatialBlend = 1f; }
 
             Health = maxHealth;
+
+            // ---- legs-only walk layer
+            walkHash = Animator.StringToHash(walkState);
+            legsLayer = animator.GetLayerIndex(legsLayerName);
+            if (legsLayer > 0) animator.SetLayerWeight(legsLayer, 0f);
+            else
+            {
+                legsLayer = -1;
+                Debug.LogWarning($"[{name}] No Animator layer called '{legsLayerName}'. Walking will use the whole body. " +
+                                 "Add a Legs layer with a legs-only Avatar Mask to move just the legs.", this);
+            }
+
+            // ---- side-scroll: put everyone on the same lane and face left or right
+            if (sideScroll)
+            {
+                cc.enabled = false;
+                Vector3 p = transform.position; p.z = laneZ;
+                transform.position = p;
+                float side = Vector3.Dot(transform.forward, Vector3.right) >= 0f ? 1f : -1f;
+                transform.rotation = Quaternion.LookRotation(Vector3.right * side);
+                cc.enabled = true;
+            }
+
             CacheLimbs();
             SetupRagdoll();
         }
@@ -158,12 +202,17 @@ namespace StreetFight.Code.Abstract
         }
 
         protected virtual void OnEnable() { All.Add(this); }
-        protected virtual void OnDisable() { All.Remove(this); }
+        protected virtual void OnDisable()
+        {
+            All.Remove(this);
+            if (All.Count == 0) FightOver = false;   // scene reloaded / everything destroyed
+        }
 
         void Update()
         {
             if (IsDead) return;
             Tick();
+            UpdateLegsLayer();
 
             // gravity + knockback
             float dt = Time.deltaTime;
@@ -171,6 +220,40 @@ namespace StreetFight.Code.Abstract
             verticalVelocity += gravity * dt;
             cc.Move((knockbackVelocity + Vector3.up * verticalVelocity) * dt);
             knockbackVelocity *= Mathf.Exp(-KnockbackDecay * dt);
+
+            KeepOnLane();
+        }
+
+        /// <summary>Undo any sideways drift (e.g. sliding off another fighter's collider).</summary>
+        void KeepOnLane()
+        {
+            if (!sideScroll || !cc.enabled) return;
+            float dz = laneZ - transform.position.z;
+            if (Mathf.Abs(dz) > 0.001f) cc.Move(new Vector3(0f, 0f, dz));
+        }
+
+        /// <summary>
+        /// Fades the legs-only walk layer in while walking and out otherwise. The base layer keeps playing
+        /// Idle, so the upper body never changes; only the legs take the walk cycle.
+        /// </summary>
+        void UpdateLegsLayer()
+        {
+            if (legsLayer < 0) return;
+
+            float target = (State == FighterState.Free && isMoving) ? 1f : 0f;
+            legsWeight = Mathf.MoveTowards(legsWeight, target, legsBlendSpeed * Time.deltaTime);
+            animator.SetLayerWeight(legsLayer, legsWeight);
+
+            // Keep the cycle running for as long as we're moving, even if the clip isn't set to loop.
+            if (forceWalkLoop && target > 0f && !animator.IsInTransition(legsLayer) && Time.time - lastWalkRestart > 0.25f)
+            {
+                AnimatorStateInfo s = animator.GetCurrentAnimatorStateInfo(legsLayer);
+                if (s.shortNameHash == walkHash && !s.loop && s.normalizedTime >= 0.98f)
+                {
+                    lastWalkRestart = Time.time;
+                    animator.CrossFadeInFixedTime(walkHash, 0.05f, legsLayer, 0f);
+                }
+            }
         }
 
         /// <summary>Called every frame while alive. Hero reads input, NPC runs AI.</summary>
@@ -420,14 +503,24 @@ namespace StreetFight.Code.Abstract
             Died?.Invoke(this);
 
             CameraShake.Shake(0.6f, 4f);
-            if (hit.attacker != null && hit.attacker.IsPlayer && !slowMoActive)
+            if (((hit.attacker != null && hit.attacker.IsPlayer) || IsPlayer) && !slowMoActive)
                 StartCoroutine(SlowMoRoutine(0.25f, 0.55f));
 
             if (!string.IsNullOrEmpty(deathState)) Play(deathState, 0.05f);
             else if (ragdollBodies.Length > 0) EnableRagdoll(hit);
             // else: stays frozen in the hit pose until you add a death animation or a ragdoll
 
-            if (!IsPlayer && corpseLifetime > 0f) Destroy(gameObject, corpseLifetime);
+            // Fight is over when a whole side has been knocked out.
+            bool sideDefeated = true;
+            foreach (Fighter f in All)
+                if (f.team == team && !f.IsDead) { sideDefeated = false; break; }
+            if (sideDefeated && !FightOver)
+            {
+                FightOver = true;
+                FightEnded?.Invoke(this);
+            }
+
+            if (!IsPlayer && corpseLifetime > 0f && !FightOver) Destroy(gameObject, corpseLifetime);
         }
 
         static IEnumerator SlowMoRoutine(float scale, float realSeconds)
@@ -468,24 +561,25 @@ namespace StreetFight.Code.Abstract
         }
 
         // ------------------------------------------------------------------ locomotion helpers
+        /// <summary>Call every frame from Tick(). Only the legs animate; the base layer keeps the Idle pose.</summary>
         protected void SetMoving(bool moving)
         {
-            if (moving != isMoving)
+            if (moving == isMoving) return;
+            isMoving = moving;
+
+            if (legsLayer >= 0)
             {
-                isMoving = moving;
-                locoTimer = locomotionTransitionTime;
-                Play(moving ? idleToWalkState : walkToIdleState, 0.08f);
+                if (moving) animator.CrossFadeInFixedTime(walkHash, 0f, legsLayer, 0f);   // start the cycle at frame 0; weight fades in
             }
-            else if (locoTimer > 0f)
+            else
             {
-                locoTimer -= Time.deltaTime;
-                if (locoTimer <= 0f) Play(moving ? walkState : idleState, 0.1f);
+                Play(moving ? walkState : idleState, 0.1f);   // fallback: no Legs layer, whole body walks
             }
         }
 
-        void ResetLocomotion() { isMoving = false; locoTimer = 0f; }
+        void ResetLocomotion() { isMoving = false; }
 
-        protected void MoveBy(Vector3 delta) { if (cc.enabled) cc.Move(delta); }
+        protected void MoveBy(Vector3 delta) { if (cc.enabled) cc.Move(Flat(delta)); }
 
         protected void RotateTowards(Vector3 dir, float degPerSec)
         {
@@ -494,7 +588,11 @@ namespace StreetFight.Code.Abstract
             transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(dir), degPerSec * Time.deltaTime);
         }
 
-        protected static Vector3 Flat(Vector3 v) { v.y = 0f; return v; }
+        /// <summary>Flattens a vector to the movement plane. In side-scroll mode that's the left/right axis only.</summary>
+        protected Vector3 Flat(Vector3 v)
+        {
+            return sideScroll ? new Vector3(v.x, 0f, 0f) : new Vector3(v.x, 0f, v.z);
+        }
 
         void Play(string state, float fade)
         {
@@ -537,6 +635,7 @@ namespace StreetFight.Code.Abstract
         {
             if (animator && animator.isHuman)
             {
+                hips = animator.GetBoneTransform(HumanBodyBones.Hips);
                 if (!leftHand) leftHand = animator.GetBoneTransform(HumanBodyBones.LeftHand);
                 if (!rightHand) rightHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
                 if (!leftFoot) leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
@@ -559,13 +658,18 @@ namespace StreetFight.Code.Abstract
 
         void ValidateStates()
         {
-            var names = new List<string> { idleState, walkState, idleToWalkState, walkToIdleState, dodgeFwdState, dodgeBwdState, hitState };
+            var names = new List<string> { idleState, dodgeFwdState, dodgeBwdState, hitState };
             foreach (AttackData[] chain in new[] { lightChain, heavyChain, specialChain })
                 foreach (AttackData a in chain) names.Add(a.stateName);
 
             foreach (string n in names)
                 if (!animator.HasState(0, Animator.StringToHash(n)))
                     Debug.LogError($"[{name}] Animator has no state named '{n}' on layer 0. Check spelling/case.", this);
+
+            int walkLayer = legsLayer >= 0 ? legsLayer : 0;
+            if (!animator.HasState(walkLayer, walkHash))
+                Debug.LogError($"[{name}] '{walkState}' not found on Animator layer {walkLayer} " +
+                               $"({(legsLayer >= 0 ? "'" + legsLayerName + "'" : "Base Layer")}). Put the walk state on that layer.", this);
         }
 
         void OnDrawGizmosSelected()

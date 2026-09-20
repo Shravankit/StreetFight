@@ -51,6 +51,8 @@ namespace StreetFight.Code.Combat
 
         protected override void Tick()
         {
+            if (FightOver) { if (State == FighterState.Free) SetMoving(false); return; }
+
             if (target == null || target.IsDead)
                 target = FindNearest(transform.position, team, sightRadius);
             if (target != subscribedTarget) SetTarget(target);
@@ -88,7 +90,7 @@ namespace StreetFight.Code.Combat
             if (!inRange)
             {
                 SetMoving(true);
-                MoveBy(transform.forward * (walkSpeed * Time.deltaTime));
+                MoveBy(to.normalized * (walkSpeed * Time.deltaTime));   // straight along the lane toward the hero
             }
             else
             {
