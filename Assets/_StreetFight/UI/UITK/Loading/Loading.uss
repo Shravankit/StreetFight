@@ -1,0 +1,107 @@
+.loading-screen {
+    width: 100%;
+    height: 100%;
+    background-color: rgb(8, 8, 9);
+    align-items: center;
+    justify-content: center;
+}
+
+.background {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    -unity-background-scale-mode: scale-and-crop;
+    opacity: 0.7;
+}
+
+/* Darkens edges so the centered title/bar stay readable over any key art */
+.vignette {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+/* Faint oversized bat mark behind the content, same idea as the main menu watermark */
+.bat-watermark {
+    position: absolute;
+    width: 480px;
+    height: 480px;
+    opacity: 0.05;
+    /* background-image: resource("Icons/bat_symbol"); */
+}
+
+.content {
+    width: 700px;
+    align-items: center;
+    justify-content: center;
+}
+
+.title-accent {
+    width: 40px;
+    height: 2px;
+    background-color: rgb(210, 210, 210);
+    margin-bottom: 16px;
+}
+
+.game-title {
+    font-size: 48px;
+    -unity-font-style: bold;
+    color: rgb(235, 235, 235);
+    letter-spacing: 3px;
+    -unity-text-align: middle-center;
+}
+
+.studio-name {
+    margin-top: 8px;
+    font-size: 12px;
+    color: rgb(150, 150, 150);
+    letter-spacing: 4px;
+    -unity-text-align: middle-center;
+}
+
+.loading-container {
+    width: 420px;
+    margin-top: 90px;
+    align-items: center;
+}
+
+.progress-background {
+    width: 100%;
+    height: 3px;
+    background-color: rgb(40, 40, 42);
+}
+
+.progress-fill {
+    width: 0%;
+    height: 100%;
+    background-color: rgb(220, 220, 220);
+}
+
+.loading-row {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.loading-label {
+    font-size: 11px;
+    color: rgb(140, 140, 140);
+    letter-spacing: 3px;
+}
+
+.progress-text {
+    font-size: 11px;
+    color: rgb(140, 140, 140);
+    letter-spacing: 1px;
+}
+
+.version {
+    position: absolute;
+    right: 25px;
+    bottom: 20px;
+    font-size: 9px;
+    color: rgb(90, 90, 90);
+    letter-spacing: 1px;
+}

@@ -1,0 +1,26 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/_StreetFight/UI/UITK/Loading/Loading.uss?fileID=7433441132597879392&amp;guid=5e357c598ec57004baa2c63c820a777d&amp;type=3#Loading" />
+    <ui:VisualElement name="loading-screen" class="loading-screen">
+        <ui:VisualElement name="background" class="background" />
+        <ui:VisualElement name="vignette" class="vignette" />
+        <ui:VisualElement name="bat-watermark" class="bat-watermark" />
+
+        <ui:VisualElement name="content" class="content">
+            <ui:VisualElement name="title-accent" class="title-accent" />
+            <ui:Label name="game-title" text="STREET FIGHT" class="game-title" />
+            <ui:Label name="studio-name" text="B A T M A N   E D I T I O N" class="studio-name" />
+
+            <ui:VisualElement name="loading-container" class="loading-container">
+                <ui:VisualElement name="progress-background" class="progress-background">
+                    <ui:VisualElement name="progress-fill" class="progress-fill" />
+                </ui:VisualElement>
+                <ui:VisualElement name="loading-row" class="loading-row">
+                    <ui:Label name="loading-label" text="LOADING" class="loading-label" />
+                    <ui:Label name="progress-text" text="0%" class="progress-text" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label name="version" text="VERSION 0.1" class="version" />
+    </ui:VisualElement>
+</ui:UXML>
