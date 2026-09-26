@@ -134,6 +134,10 @@ namespace StreetFight.Code.Abstract
         /// <summary>Raised once when the fight ends. The argument is the fighter whose death ended it.</summary>
         public static event System.Action<Fighter> FightEnded;
 
+        /// <summary>False during round intro/countdown so Tick() (input/AI) doesn't run yet.</summary>
+        public static bool RoundActive { get; private set; }
+        public static void SetRoundActive(bool active) => RoundActive = active;
+
         /// <summary>Middle of the body. Follows the ragdoll after death (the root object stays where the fighter fell from).</summary>
         public Vector3 FocusPoint => hips ? hips.position : transform.position + Vector3.up;
 
@@ -211,7 +215,10 @@ namespace StreetFight.Code.Abstract
         void Update()
         {
             if (IsDead) return;
-            Tick();
+
+            if (RoundActive) Tick();
+            else SetMoving(false);
+
             UpdateLegsLayer();
 
             // gravity + knockback
@@ -306,6 +313,12 @@ namespace StreetFight.Code.Abstract
 
             if (Health <= 0f) { Die(hit); return; }
             StartAction(HitStunRoutine(hit.stun));
+        }
+
+        public void ForceTimeoutLoss()
+        {
+            if (IsDead) return;
+            Die(new HitInfo { attacker = null, damage = 0f, direction = -transform.forward });
         }
 
         public static Fighter FindNearest(Vector3 from, int myTeam, float radius,
